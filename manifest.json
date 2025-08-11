@@ -1,0 +1,21 @@
+{
+  "short_name": "TopTweets",
+  "name": "Top Tweets — Personal",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f172a",
+  "description": "Personal PWA that shows top tweets from your chosen handles using public RSS (Nitter).",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

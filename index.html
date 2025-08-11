@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Top Tweets — Personal</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0f172a" />
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <h1 class="title">Top Tweets</h1>
+      <div class="controls">
+        <button id="openSettings" class="btn ghost">Settings</button>
+        <button id="refreshBtn" class="btn">Fetch Now</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="intro">
+      <p class="muted">Personal feed. No ads. Private. Shows the top, cherry‑picked tweets from your saved handles.</p>
+    </section>
+
+    <section id="handlesSection" class="card small">
+      <div class="card-row">
+        <div>
+          <label class="label">Saved handles</label>
+          <div id="handlesList" class="handles-list"></div>
+        </div>
+        <div class="add-handle">
+          <label class="label">Add handle</label>
+          <div class="add-row">
+            <input id="handleInput" placeholder="e.g. elonmusk or PMOIndia" class="input" />
+            <button id="addHandleBtn" class="btn small">Add</button>
+          </div>
+          <p class="muted small">No @ needed. Handles stored locally in your browser.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="tweetsContainer" class="tweets-grid"></section>
+
+    <footer class="footer muted small">
+      <span>Tip: Install as PWA for quick access — Add to Home Screen.</span>
+    </footer>
+  </main>
+
+  <!-- Settings modal -->
+  <div id="settingsModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-panel card">
+      <h3>Settings</h3>
+      <label class="label">Nitter instance (default: nitter.net)</label>
+      <input id="nitterInput" class="input" placeholder="https://nitter.net" />
+      <label class="label">Top tweets to show (overall)</label>
+      <input id="topN" type="number" min="1" max="50" class="input" />
+      <label class="label">Per-handle fetch (latest per handle)</label>
+      <input id="perHandle" type="number" min="1" max="50" class="input" />
+      <div class="modal-actions">
+        <button id="saveSettings" class="btn">Save</button>
+        <button id="closeSettings" class="btn ghost">Close</button>
+      </div>
+      <p class="muted small">If RSS fails due to CORS, the app uses a public CORS proxy automatically.</p>
+    </div>
+  </div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
