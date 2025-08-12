@@ -1,18 +1,15 @@
 /* app.js
-  - Uses Nitter RSS (/username/rss)
-  - Default nitter instance: https://nitter.kavin.rocks (editable in Settings)
-  - Falls back to AllOrigins CORS proxy if direct fetch fails
-  - Top N per handle is used: perHandle (fetch count) and topN (overall shown)
+   - Uses your Vercel serverless API at /api/tweets
+   - Top N per handle is controlled by perHandle (fetch count) and topN (overall shown)
 */
 
 const STORAGE_KEY = 'topTweets_pwa_handles_v1';
 const SETTINGS_KEY = 'topTweets_pwa_settings_v1';
 
 const DEFAULTS = {
-  nitterBase: 'https://nitter.kavin.rocks',
+  apiBase: '/api/tweets', // Call your serverless endpoint
   perHandle: 5,
-  topN: 12,
-  corsProxy: 'https://api.allorigins.win/raw?url=' // fallback public proxy
+  topN: 12
 };
 
 // UI refs
@@ -23,7 +20,7 @@ const tweetsContainer = document.getElementById('tweetsContainer');
 const refreshBtn = document.getElementById('refreshBtn');
 const openSettings = document.getElementById('openSettings');
 const settingsModal = document.getElementById('settingsModal');
-const nitterInput = document.getElementById('nitterInput');
+const apiInput = document.getElementById('nitterInput'); // repurpose for API base
 const saveSettings = document.getElementById('saveSettings');
 const closeSettings = document.getElementById('closeSettings');
 const topNInput = document.getElementById('topN');
@@ -79,7 +76,7 @@ handleInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addHandl
 // Settings modal
 openSettings.addEventListener('click', () => {
   const s = readSettings();
-  nitterInput.value = s.nitterBase;
+  apiInput.value = s.apiBase;
   topNInput.value = s.topN;
   perHandleInput.value = s.perHandle;
   settingsModal.classList.remove('hidden');
@@ -87,72 +84,30 @@ openSettings.addEventListener('click', () => {
 closeSettings.addEventListener('click', () => settingsModal.classList.add('hidden'));
 saveSettings.addEventListener('click', () => {
   const s = {
-    nitterBase: (nitterInput.value || '').trim() || DEFAULTS.nitterBase,
+    apiBase: (apiInput.value || '').trim() || DEFAULTS.apiBase,
     topN: Math.max(1, parseInt(topNInput.value || DEFAULTS.topN, 10)),
-    perHandle: Math.max(1, parseInt(perHandleInput.value || DEFAULTS.perHandle, 10)),
-    corsProxy: DEFAULTS.corsProxy
+    perHandle: Math.max(1, parseInt(perHandleInput.value || DEFAULTS.perHandle, 10))
   };
   writeSettings(s);
   settingsModal.classList.add('hidden');
 });
 
-// Fetch with fallback to CORS proxy
-async function fetchWithFallback(url, proxy) {
-  try {
-    const r = await fetch(url, { cache: 'no-cache' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return await r.text();
-  } catch (err) {
-    // fallback to proxy
-    if (!proxy) throw err;
-    const proxied = proxy + encodeURIComponent(url);
-    const r2 = await fetch(proxied);
-    if (!r2.ok) throw new Error('Proxy HTTP ' + r2.status);
-    return await r2.text();
-  }
+// Fetch tweets from API
+async function fetchTweetsForHandle(handle, perHandle, apiBase) {
+  const url = `${apiBase}?handle=${encodeURIComponent(handle)}&count=${perHandle}`;
+  const res = await fetch(url, { cache: 'no-cache' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return (data.tweets || []).map(t => ({
+    text: t,
+    link: `https://twitter.com/${handle}`,
+    pubDate: new Date(),
+    rawDesc: '',
+    handle
+  }));
 }
 
-// Parse Nitter RSS XML into tweet objects
-function parseRSS(xmlText) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xmlText, "application/xml");
-  // check for parsererror
-  if (doc.querySelector('parsererror')) return [];
-  const items = Array.from(doc.querySelectorAll('item'));
-  return items.map(it => {
-    const title = it.querySelector('title')?.textContent || '';
-    const link = it.querySelector('link')?.textContent || '';
-    const pubDate = it.querySelector('pubDate') ? new Date(it.querySelector('pubDate').textContent) : new Date();
-    const desc = it.querySelector('description')?.textContent || '';
-    return { text: (title || desc).trim(), link, pubDate, rawDesc: desc };
-  });
-}
-
-// Score function to approximate popularity (transparent)
-function scoreTweet(tweet) {
-  const t = tweet.text || '';
-  let score = Math.min(200, t.length);
-  const hashtags = (t.match(/#\w+/g) || []).length; score += hashtags * 12;
-  const mentions = (t.match(/@\w+/g) || []).length; score += mentions * 8;
-  const numbers = (t.match(/\d+[kKmM]?/g) || []).length; score += numbers * 6;
-  const raw = (tweet.rawDesc||'').toLowerCase();
-  if (raw.match(/\blike(s)?\b|\bretweet(s)?\b/)) score += 30;
-  if (raw.match(/\b\d+k\b|\d+m\b/)) score += 45;
-  const ageHours = Math.max(0, (Date.now() - tweet.pubDate.getTime())/(1000*60*60));
-  score += Math.max(0, 24 - Math.min(24, ageHours)) * 2;
-  return score;
-}
-
-// Fetch tweets for a single handle (RSS)
-async function fetchTweetsForHandle(handle, perHandle, nitterBase, corsProxy) {
-  const url = `${nitterBase.replace(/\/+$/, '')}/${encodeURIComponent(handle)}/rss`;
-  const txt = await fetchWithFallback(url, corsProxy);
-  const items = parseRSS(txt);
-  // attach handle and slice to perHandle
-  return items.slice(0, perHandle).map(it => ({ ...it, handle }));
-}
-
-// Render tweet card to HTML
+// Render tweet card
 function renderTweetCard(t) {
   const timeAgo = timeSince(t.pubDate);
   const text = escapeHtml(t.text);
@@ -188,6 +143,15 @@ function timeSince(d) {
   return 'just now';
 }
 
+// Scoring function
+function scoreTweet(tweet) {
+  const t = tweet.text || '';
+  let score = Math.min(200, t.length);
+  const hashtags = (t.match(/#\w+/g) || []).length; score += hashtags * 12;
+  const mentions = (t.match(/@\w+/g) || []).length; score += mentions * 8;
+  return score;
+}
+
 // Main loader
 let isLoading = false;
 async function loadAndRender() {
@@ -206,46 +170,36 @@ async function loadAndRender() {
   const all = [];
   for (const h of handles) {
     try {
-      const items = await fetchTweetsForHandle(h, settings.perHandle, settings.nitterBase, settings.corsProxy);
+      const items = await fetchTweetsForHandle(h, settings.perHandle, settings.apiBase);
       items.forEach(it => all.push(it));
     } catch (err) {
       console.warn('fetch failed for', h, err);
-      // push a small error card as a placeholder
-      all.push({ text: `Failed to fetch @${h} — instance may block CORS or be down. Try another instance in Settings.`, link:'#', pubDate: new Date(0), rawDesc:'', handle: h });
+      all.push({ text: `Failed to fetch @${h} — check API.`, link:'#', pubDate: new Date(0), rawDesc:'', handle: h });
     }
   }
 
-  // Score & sort (topN overall)
   all.forEach(a => a._score = scoreTweet(a));
-  all.sort((a,b) => (b._score - a._score) || (b.pubDate - a.pubDate));
+  all.sort((a,b) => (b._score - a._score));
   const top = all.slice(0, settings.topN);
 
-  if (top.length === 0) {
-    tweetsContainer.innerHTML = `<div class="card">No tweets found for these handles — try another Nitter instance in Settings.</div>`;
-  } else {
-    tweetsContainer.innerHTML = top.map(renderTweetCard).join('');
-  }
+  tweetsContainer.innerHTML = top.length ? top.map(renderTweetCard).join('') :
+    `<div class="card">No tweets found for these handles.</div>`;
 
   refreshBtn.disabled = false; refreshBtn.textContent = 'Fetch Now'; isLoading = false;
   renderHandles();
 }
 
-// wiring
 refreshBtn.addEventListener('click', loadAndRender);
 
-// initial setup
+// init
 (function init(){
   const s = readSettings();
-  nitterInput.value = s.nitterBase;
+  apiInput.value = s.apiBase;
   topNInput.value = s.topN;
   perHandleInput.value = s.perHandle;
   renderHandles();
-  // auto-load when user opens (you asked it loads when opened)
   setTimeout(loadAndRender, 250);
 })();
-
-// expose for debugging
-window.topTweets = { readHandles, writeHandles, readSettings, writeSettings, loadAndRender };
 
 
 // // === Configuration keys & defaults ===
